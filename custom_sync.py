@@ -1,19 +1,23 @@
 ## ----------------------------------------- imported libraries -----------------------------------------
 from os import path, listdir, mkdir, remove
 import shutil
-from time import sleep
+from time import sleep, perf_counter
 import sys
 import itertools
+import logging
+import hashlib
 
 ## ----------------------------------------- Function definitions -----------------------------------------
+## TODO: Need logging with time stamps.
+
 def sync_dir_changes(src:str, replica:str):
-    '''This only copies directory from src to replica. Also copies changes in files. Delete extra files found in replica.'''
+    '''copies directory from src to replica. Also copies changes in files. Delete extra files found in replica.'''
     for element in listdir(src):
         if path.isfile(path.join(src, element)): # for files only
             if not path.exists(path.join(replica, element)):
                 print(f'Copying {path.join(replica, element)}')
                 shutil.copyfile(path.join(src, element), path.join(replica, element))
-            elif path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element)):  # compare for modification time between replica and src
+            elif path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element)):  # compares modification time between replica and src
                 print(f'Copying {path.join(replica, element)}')
                 shutil.copyfile(path.join(src, element), path.join(replica, element))
                 
@@ -50,29 +54,31 @@ def create_base_sync_changes(src:str, replica:str):
                     shutil.rmtree(replica_element_path) # delete dir tree
     sync_dir_changes(src, replica)
 
+##TODO: hash check at end (see notebook.)
+
 ## ----------------------------------------- Arguments -----------------------------------------
-src_path, replica_path, sync_interval, sync_attempts_num, log_path = sys.argv[1:]
+src_path, replica_path, sync_interval, sync_attempt_limit, log_path = sys.argv[1:]
 sync_interval = float(sync_interval)
-sync_attempts_num = int(sync_attempts_num)
-# print(f'src_path: {src_path}')
-# print(f'replica_path: {replica_path}')
+sync_attempt_limit = int(sync_attempt_limit)
 
-# print(f'sync_interval: {sync_interval}')
-# print(f'sync_attempts: {sync_attempts}')
-
-# print(f'log_path: {log_path}')
 
 ## ----------------------------------------- main -----------------------------------------
 def main():
-    spinner = itertools.cycle(['-', '/', '|', '\\'])
-    sync_attempts = 0
-    while sync_attempts < sync_attempts_num: #TODO: spinning wheel or some othe waiting icon
+    spinner = itertools.cycle(['-', '/', '|', '\\']) # This shouldn't be logged
+    sync_cycle = 0
+    while sync_cycle < sync_attempt_limit:
+        t0 = perf_counter()
         create_base_sync_changes(src_path, replica_path)
-        sleep(sync_interval) # sync interval
-        sys.stdout.write(next(spinner))
+        # sleep(sync_interval) 
+        
+        execution_time = perf_counter() - t0
+        sleep_time = sync_interval - execution_time #TODO: error handling. what if processing > sync_interval
+        sleep(sleep_time)
+        sys.stdout.write(next(spinner)) # Spinning wheel
         sys.stdout.flush()
         sys.stdout.write('\b')
-        sync_attempts += 1
+
+        sync_cycle += 1
 
 if __name__ == "__main__":
     main()
