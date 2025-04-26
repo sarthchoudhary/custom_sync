@@ -20,9 +20,12 @@ class DirectorySynchroniser:
             self.src_path = src_path
             self.replica_path = replica_path
             self.sync_interval = float(sync_interval)
-            self.sync_attempt_limit = int(sync_attempt_limit) # sync amount
+            try:
+                self.sync_attempt_limit = int(sync_attempt_limit) # sync amount
+            except ValueError as e:
+                self.sync_attempt_limit = float(sync_attempt_limit)
             self.log_path = log_path
-            self._validate_inputs()
+            self._validate_inputs(sync_interval, sync_attempt_limit)
             self._setup_logging()
 
     def _setup_logging(self):
@@ -50,8 +53,8 @@ class DirectorySynchroniser:
         if not access(log_file_path, W_OK):
             raise PermissionError(f"No write permission for creating log at {log_file_path}. Please fix permissions and try again.")
 
-    def _validate_inputs(self):
-        """Validate paths, permissions, and configuration."""
+    def _validate_inputs(self, sync_interval, sync_attempt_limit):
+        """Validate paths, permissions, and configuration.""" # not logged
         if not path.exists(self.src_path):
             logging.error(f"Source path does not exist: {self.src_path}")
             # sys.exit(1) # only logging error; not exiting the program.
@@ -62,11 +65,16 @@ class DirectorySynchroniser:
             logging.error(f"Replica path is not a directory: {self.replica_path}")
             # sys.exit(1)
         if self.sync_interval <= 0:
+        # if sync_interval <= 0:
             logging.error("Sync interval must be positive")
             # sys.exit(1)
         if self.sync_attempt_limit <= 0:
+        # if sync_attempt_limit <= 0:
             logging.error("Sync attempt limit must be positive integer")
             # sys.exit(1)
+        if not isinstance(self.sync_attempt_limit, int):
+            self.sync_attempt_limit = round(self.sync_attempt_limit)
+            print(f"Rounding sync attempt limit to nearest integer: {self.sync_attempt_limit}.")
         # if not (self.log_path.endswith('.log') or self.log_path.endswith('.txt')):
             # logging.error(f"Log file should either be .log or .txt file.")
         if not path.splitext(self.log_path)[1].lower() in ['.log', '.txt', '.out', '.err', '.dat', '.csv', '.json', '.trc']:
