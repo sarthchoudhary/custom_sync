@@ -130,12 +130,11 @@ class DirectorySynchroniser:
                         shutil.rmtree(replica_element_path) # delete dir tree
         self.sync_dir_changes(src, replica)
 
-    ##TODO: hash check at end (see notebook.)
-
     def start_sync(self):
         """Run the synchronisation loop."""
-        spinner = itertools.cycle(['-', '/', '|', '\\'])
+        # spinner = itertools.cycle(['-', '/', '|', '\\'])
         # spinner = itertools.cycle(['*', '**', '***', '****', '*****'])
+        spinner = itertools.cycle(['←', '↖', '↑', '↗', '→', '↘', '↓', '↙'])
         logging.info('Beginning synchronisation.')
         sync_cycle = 0
         while sync_cycle < self.sync_attempt_limit:
@@ -145,12 +144,26 @@ class DirectorySynchroniser:
             
             execution_time = perf_counter() - t0
             sleep_time = max(0, self.sync_interval - execution_time) # sleep_time always >= 0
-            sleep(sleep_time)
-            sys.stdout.write(next(spinner)) # TODO: Spinning wheel seems slow. Should be independent of sync speed.
-            sys.stdout.flush()
-            sys.stdout.write('\b') # not logged
+            # sleep(sleep_time)
+            # sys.stdout.write(next(spinner)) # could make spinner slow. New implementation below
+            # sys.stdout.flush()
+            # sys.stdout.write('\b') # not logged
+            elapsed_time = 0
+            while elapsed_time < sleep_time:
+                sys.stdout.write(next(spinner))
+                sys.stdout.flush()
+                sleep(0.1)
+                elapsed_time += 0.1
+                sys.stdout.write('\b')
 
-            sync_cycle += 1 #TODO: at the end, close with stopping synchronisation
+            sys.stdout.write(' ')# clear spinner
+            sys.stdout.write('\b')
+            sys.stdout.flush()
+            sync_cycle += 1
+        logging.info('Stopping synchronisation.')
+
+    # def verify_sync    ##TODO: hash check at end (see notebook.)
+    # '''Verify source and replica match using MD5 checksum.'''
 
 ## ----------------------------------------- Entry point -----------------------------------------
 def main():
