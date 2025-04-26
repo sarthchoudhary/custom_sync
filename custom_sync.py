@@ -134,7 +134,7 @@ class DirectorySynchroniser:
 
     def start_sync(self):
         """Run the synchronisation loop."""
-        # spinner = itertools.cycle(['-', '/', '|', '\\'])
+        spinner = itertools.cycle(['-', '/', '|', '\\'])
         # spinner = itertools.cycle(['*', '**', '***', '****', '*****'])
         logging.info('Beginning synchronisation.')
         sync_cycle = 0
@@ -144,13 +144,13 @@ class DirectorySynchroniser:
             # sleep(sync_interval) 
             
             execution_time = perf_counter() - t0
-            sleep_time = self.sync_interval - execution_time #TODO: error handling. what if processing > sync_interval
+            sleep_time = max(0, self.sync_interval - execution_time) # sleep_time always >= 0
             sleep(sleep_time)
-            # sys.stdout.write(next(spinner)) # TODO: Spinning wheel seems slow. Should be independent of sync speed.
-            # sys.stdout.flush()
-            # sys.stdout.write('\b')
+            sys.stdout.write(next(spinner)) # TODO: Spinning wheel seems slow. Should be independent of sync speed.
+            sys.stdout.flush()
+            sys.stdout.write('\b') # not logged
 
-            sync_cycle += 1
+            sync_cycle += 1 #TODO: at the end, close with stopping synchronisation
 
 ## ----------------------------------------- Entry point -----------------------------------------
 def main():
