@@ -88,14 +88,14 @@ class DirectorySynchroniser:
 
     def sync_dir_changes(self, src:str, replica:str):
         '''copies directory from src to replica. Also copies changes in files. Delete extra files found in replica.'''
-        for element in listdir(src):
-        # dir_elements_ls = [f for f in listdir(src) if not f.startswith('.')]
-        # for element in dir_elements_ls:
+        # for element in listdir(src):
+        dir_elements_ls = [f for f in listdir(src) if not f.startswith('.')]
+        for element in dir_elements_ls:
             if path.isfile(path.join(src, element)): # for files only
                 if not path.exists(path.join(replica, element)):
                     logging.info(f'Copying {path.join(replica, element)}')
                     shutil.copyfile(path.join(src, element), path.join(replica, element))
-                elif path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element)):  # compares modification time between replica and src
+                elif path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element)):  # copies src to replica if src has newer modification timestamp
                     logging.info(f'Copying {path.join(replica, element)}')
                     shutil.copyfile(path.join(src, element), path.join(replica, element))
                     
@@ -104,7 +104,9 @@ class DirectorySynchroniser:
                     logging.info(f'Copying entire directory: {path.join(replica, element)}')
                     shutil.copytree(path.join(src, element), path.join(replica, element))
                 else:        # if the directory exists we need to traverse it and copy missing elements
-                    for replica_element in listdir(path.join(replica, element)):
+                    # for replica_element in listdir(path.join(replica, element)):
+                    replica_elements_ls = [f for f in listdir(path.join(replica, element)) if not f.startswith('.')] # we don't care about hidden files
+                    for replica_element in replica_elements_ls:
                         if not path.exists(path.join(src, element, replica_element)):
                             replica_element_path = path.join(replica, element, replica_element)
                             if path.isfile(replica_element_path):
@@ -121,7 +123,9 @@ class DirectorySynchroniser:
             logging.info(f'Creating replica directory: {replica}')
             mkdir(replica)
         else: # deletes extra dir from the base folder
-            for replica_element in listdir(replica):
+            # for replica_element in listdir(replica):
+            replica_elements_ls = [f for f in listdir(replica) if not f.startswith('.')]
+            for replica_element in replica_elements_ls:
                 if not path.exists(path.join(src, replica_element)):
                     replica_element_path = path.join(replica, replica_element)
                     if path.isfile(replica_element_path):
