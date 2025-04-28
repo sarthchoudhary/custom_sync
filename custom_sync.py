@@ -1,5 +1,5 @@
 ## ----------------------------------------- imported libraries -----------------------------------------
-from os import path, listdir, mkdir, remove, access, R_OK, W_OK
+from os import path, listdir, mkdir, remove, access, R_OK, W_OK, walk
 import shutil
 from time import sleep, perf_counter
 import sys
@@ -21,7 +21,7 @@ class DirectorySynchroniser:
             self.replica_path = replica_path
             self.sync_interval = float(sync_interval)
             try:
-                self.sync_attempt_limit = int(sync_attempt_limit) # sync amount
+                self.sync_attempt_limit = int(sync_attempt_limit) # referred to as sync amount in original problem statement
             except ValueError as e:
                 self.sync_attempt_limit = float(sync_attempt_limit)
             self.log_path = log_path
@@ -89,6 +89,8 @@ class DirectorySynchroniser:
     def sync_dir_changes(self, src:str, replica:str):
         '''copies directory from src to replica. Also copies changes in files. Delete extra files found in replica.'''
         for element in listdir(src):
+        # dir_elements_ls = [f for f in listdir(src) if not f.startswith('.')]
+        # for element in dir_elements_ls:
             if path.isfile(path.join(src, element)): # for files only
                 if not path.exists(path.join(replica, element)):
                     logging.info(f'Copying {path.join(replica, element)}')
@@ -123,7 +125,7 @@ class DirectorySynchroniser:
                 if not path.exists(path.join(src, replica_element)):
                     replica_element_path = path.join(replica, replica_element)
                     if path.isfile(replica_element_path):
-                        logging.info(f'Removing {replica_element_path}')
+                        logging.info(f'Removing {replica_element_path}') #TODO: should not remove recent swp files.
                         remove(replica_element_path) # delete a single file
                     else:
                         logging.info(f'Removing entire directory: {replica_element_path}')
@@ -140,7 +142,7 @@ class DirectorySynchroniser:
         while sync_cycle < self.sync_attempt_limit:
             t0 = perf_counter()
             self.create_base_sync_changes(self.src_path, self.replica_path)
-            # sleep(sync_interval) 
+            # sleep(sync_interval) # TODO: cleaning
             
             execution_time = perf_counter() - t0
             sleep_time = max(0, self.sync_interval - execution_time) # sleep_time always >= 0
@@ -162,18 +164,59 @@ class DirectorySynchroniser:
             sync_cycle += 1
         logging.info('Stopping synchronisation.')
 
-    # def verify_sync    ##TODO: hash check at end (see notebook.)
-    # '''Verify source and replica match using MD5 checksum.'''
+    def calc_md5_for_directory(self, dir_path:str)-> str: #TODO: what if directory is too large to be hash checked?
+        """"
+        Calculate a single MD5 checksum for the entire directory tree at dir_path.
+        This will change if any file's contents, path, or empty directories change.
+        """
+        dir_path = path.abspath(dir_path) # ensure path formatting
+        md5 = hashlib.md5()
+        follow_symlinks =  False
+
+        for root, dir_ls, file_ls in walk(dir_path, followlinks=follow_symlinks):
+            dir_ls.sort()
+            file_ls.sort()
+            
+            # Include directory names in the hash so empty dirs are accounted for
+            for dir_variable in dir_ls:
+                dir_relative_path = path.relpath(path.join(root, dir_variable), dir_path)
+                # appending D| as chatgpt suggested to avoid collision between filenames and directories
+                md5.update(f"D|{dir_relative_path}".encode('utf-8')) 
+            
+            for fname in file_ls:
+                full_file_path = path.join(root, fname)
+                file_relative_path = path.relpath(full_file_path, dir_path)
+                
+                # Update hash with the file's path (so renaming changes the checksum)
+                md5.update(f"F|{file_relative_path}".encode('utf-8')) # appending F|
+                
+                # Read file in chunks to avoid memory issues
+                with open(full_file_path, 'rb') as f:
+                    for chunk in iter(lambda: f.read(8192), b''):
+                        md5.update(chunk)
+
+        return md5.hexdigest()
+    
+    def verify_integrity(self):
+        '''
+        Verify whether source and replica match using MD5 checksum. Performed only once after the sync cycle.    
+        '''
+        if self.calc_md5_for_directory(self.src_path) == self.calc_md5_for_directory(self.replica_path):
+            logging.info(f"Integrity between the synchronisation source and replica confirmed with MD5 checksum.")
+        else:
+            logging.error(f"Integrity between the synchronisation source and replica could NOT be confirmed with MD5 checksum.")
 
 ## ----------------------------------------- Entry point -----------------------------------------
 def main():
-    ''' Pass the command-line arguments and start the program.'''
+    ''' Pass the command-line arguments, start the program, and perform integrity check.'''
     src_path, replica_path, sync_interval, sync_attempt_limit, log_path = sys.argv[1:]
 
     sync_object = DirectorySynchroniser(
             src_path, replica_path, sync_interval, sync_attempt_limit, log_path
         )
     sync_object.start_sync()
+
+    sync_object.verify_integrity()
 
 if __name__ == "__main__":
     main()
