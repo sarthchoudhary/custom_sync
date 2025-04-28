@@ -6,6 +6,7 @@ import sys
 import itertools
 import logging
 import hashlib
+import argparse
 
 __authors__ = "Sarthak Choudhary"
 __repo_url__ = "https://github.com/sarthchoudhary/custom_sync"
@@ -15,20 +16,23 @@ __repo_url__ = "https://github.com/sarthchoudhary/custom_sync"
 class DirectorySynchroniser:
     """Manages synchronisation between a source and replica directory."""
 
-    def __init__(self, src_path: str, replica_path: str, sync_interval: str, sync_attempt_limit: str, log_path: str):
+    # def __init__(self, src_path: str, replica_path: str, sync_interval: str, sync_attempt_limit: str, log_path: str):
+    def __init__(self, src_path: str, replica_path: str, sync_interval: float, sync_attempt_limit: int, log_path: str):
             """Initialise variables."""
             self.src_path = src_path
             self.replica_path = replica_path
-            self.sync_interval = float(sync_interval)
-            try:
-                self.sync_attempt_limit = int(sync_attempt_limit) # referred to as sync amount in original problem statement
-            except ValueError as e:
-                self.sync_attempt_limit = float(sync_attempt_limit)
+            # self.sync_interval = float(sync_interval)
+            self.sync_interval = sync_interval
+            # try:
+            #     self.sync_attempt_limit = int(sync_attempt_limit) # referred to as sync amount in original problem statement
+            # except ValueError as e:
+            #     self.sync_attempt_limit = float(sync_attempt_limit)
+            self.sync_attempt_limit = sync_attempt_limit
             self.log_path = log_path
             self._validate_inputs(sync_interval, sync_attempt_limit)
             self._setup_logging()
             # directories exceeding this threshold will be skipped for integrity testing.
-            self.size_threshold = 3*1024**3  # bytes # TODO: this could be larger.
+            self.size_threshold = 3*1024**3  # bytes # TODO: we could increase the threshold ~5 GB.
 
     def _setup_logging(self):
         """Configure logging to file and console."""
@@ -55,38 +59,45 @@ class DirectorySynchroniser:
         if not access(log_file_path, W_OK):
             raise PermissionError(f"No write permission for creating log at {log_file_path}. Please fix permissions and try again.")
 
-    def _validate_inputs(self, sync_interval, sync_attempt_limit):
-        """Validate paths, permissions, and configuration.""" # not logged to file. TODO issue?
+    def _validate_inputs(self):
+        """Validate paths, permissions, and configuration."""
         if not path.exists(self.src_path):
-            logging.error(f"Source path does not exist: {self.src_path}")
+            # logging.error(f"Source path does not exist: {self.src_path}")
             # sys.exit(1) # not exiting as per the test environment requirement.
+            raise FileNotFoundError(f"Source path does not exist: {self.src_path}")
         if not path.isdir(self.src_path):
-            logging.error(f"Source path is not a directory: {self.src_path}")
+            # logging.error(f"Source path is not a directory: {self.src_path}")
             # sys.exit(1)
+            raise NotADirectoryError(f"Source path is not a directory: {self.src_path}")
         if path.exists(self.replica_path) and not path.isdir(self.replica_path):
-            logging.error(f"Replica path is not a directory: {self.replica_path}")
+            # logging.error(f"Replica path is not a directory: {self.replica_path}")
             # sys.exit(1)
+            raise NotADirectoryError(f"Replica path is not a directory: {self.replica_path}")
         if self.sync_interval <= 0:
         # if sync_interval <= 0:
-            logging.error("Sync interval must be positive")
+            raise ValueError("Sync interval must be positive")
+            # logging.error("Sync interval must be positive")
             # sys.exit(1)
         if self.sync_attempt_limit <= 0:
         # if sync_attempt_limit <= 0:
-            logging.error("Sync attempt limit must be positive integer")
+            raise ValueError("Sync attempt limit must be positive integer")
+            # logging.error("Sync attempt limit must be positive integer")
             # sys.exit(1)
-        if not isinstance(self.sync_attempt_limit, int):
-            self.sync_attempt_limit = round(self.sync_attempt_limit)
-            print(f"Rounding sync attempt limit to nearest integer: {self.sync_attempt_limit}.")
+        # if not isinstance(self.sync_attempt_limit, int):
+        #     self.sync_attempt_limit = round(self.sync_attempt_limit)
+        #     print(f"Rounding sync attempt limit to nearest integer: {self.sync_attempt_limit}.")
         # if not (self.log_path.endswith('.log') or self.log_path.endswith('.txt')):
             # logging.error(f"Log file should either be .log or .txt file.")
         if not path.splitext(self.log_path)[1].lower() in ['.log', '.txt', '.out', '.err', '.dat', '.csv', '.json', '.trc']:
-            logging.error(f"Log file does not have a valid extension.")
+            # logging.error(f"Log file does not have a valid extension.")
             # sys.exit(1)
-        try:
-            self._check_permissions()
-        except PermissionError as e:
-            logging.error(str(e))
+            raise ValueError(f"Log file does not have a valid extension. Must be one of: .log, .txt, .out, .err, .dat, .csv, .json, .trc")
+        # try:
+        #     self._check_permissions()
+        # except PermissionError as e:
+        #     logging.error(str(e))
             # sys.exit(1)
+        self._check_permissions()
 
     def calc_MD5(self, dir_path:str)->str:
         ''' Calculates MD5 checksum for a single file.'''
@@ -233,16 +244,38 @@ class DirectorySynchroniser:
 ## ----------------------------------------- Entry point -----------------------------------------
 def main():
     ''' Pass the command-line arguments, start the program, and perform integrity check.'''
+    
+    # if len(sys.argv) != 6:
+    #     raise ValueError("Usage: python custom_sync.py src_path replica_path sync_interval sync_attempt_limit log_path")
+        ## test environment requires that I do not call exit function. 
+        ## logging.error("Usage: python custom_sync.py src_path replica_path sync_interval sync_attempt_limit log_path")
+        ## sys.exit(1) 
 
-    if len(sys.argv) != 6:
-        logging.error("Usage: python custom_sync.py src_path replica_path sync_interval sync_attempt_limit log_path")
-        # sys.exit(1) # test environment requires that I do not call exit function. 
+    # src_path, replica_path, sync_interval, sync_attempt_limit, log_path = sys.argv[1:]
 
-    src_path, replica_path, sync_interval, sync_attempt_limit, log_path = sys.argv[1:]
+    # sync_object = DirectorySynchroniser(
+    #         src_path, replica_path, sync_interval, sync_attempt_limit, log_path
+    #     )
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("src_path", type=str, help="Source directory path")
+    parser.add_argument("replica_path", type=str, help="Replica directory path")
+    parser.add_argument("sync_interval", type=float, help="Synchronisation interval in seconds")
+    parser.add_argument("sync_attempt_limit", type=int, help="Number of sync cycles")
+    parser.add_argument("log_path", type=str, help="Path to log file")
+    
+    #TODO: lets see if this causes any problem with test environment
+    args = parser.parse_args()
+
+    # try:   
+    #     args = parser.parse_args()
+    # except SystemExit:
+    #     return
+    
     sync_object = DirectorySynchroniser(
-            src_path, replica_path, sync_interval, sync_attempt_limit, log_path
-        )
+        args.src_path, args.replica_path, args.sync_interval, args.sync_attempt_limit, args.log_path
+    )
+
     sync_object.start_sync()
 
     sync_object.verify_integrity()
