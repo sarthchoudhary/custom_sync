@@ -86,6 +86,14 @@ class DirectorySynchroniser:
             logging.error(str(e))
             # sys.exit(1)
 
+    def calc_MD5(self, dir_path:str)->str:
+        ''' Calculates MD5 checksum for a single file.'''
+        md5 = hashlib.md5()
+        with open(dir_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''): # read file in chunks
+                md5.update(chunk)
+        return md5.hexdigest()
+
     def sync_dir_changes(self, src:str, replica:str):
         '''copies directory from src to replica. Also copies changes in files. Delete extra files found in replica.'''
         # for element in listdir(src):
@@ -95,10 +103,11 @@ class DirectorySynchroniser:
                 if not path.exists(path.join(replica, element)):
                     logging.info(f'Copying {path.join(replica, element)}')
                     shutil.copyfile(path.join(src, element), path.join(replica, element))
-                elif path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element)):  # copies src to replica if src has newer modification timestamp
+                elif (path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element))) or (self.calc_MD5(path.join(src, element)) != self.calc_MD5(path.join(replica, element))):  # copies src to replica if src has newer modification timestamp
+                # any manual modification to a replica file should trigger sync code to replace that file with src copy. This is checked with MD5 checksum.
                     logging.info(f'Copying {path.join(replica, element)}')
                     shutil.copyfile(path.join(src, element), path.join(replica, element))
-                    
+
             else: # for directories only
                 if not path.exists(path.join(replica, element)):
                     logging.info(f'Copying entire directory: {path.join(replica, element)}')
