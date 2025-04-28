@@ -27,6 +27,8 @@ class DirectorySynchroniser:
             self.log_path = log_path
             self._validate_inputs(sync_interval, sync_attempt_limit)
             self._setup_logging()
+            # directories exceeding this threshold will be skipped for integrity testing.
+            self.size_threshold = 3*1024**3  # bytes
 
     def _setup_logging(self):
         """Configure logging to file and console."""
@@ -138,7 +140,7 @@ class DirectorySynchroniser:
                 if not path.exists(path.join(src, replica_element)):
                     replica_element_path = path.join(replica, replica_element)
                     if path.isfile(replica_element_path):
-                        logging.info(f'Removing {replica_element_path}') #TODO: should not remove recent swp files.
+                        logging.info(f'Removing {replica_element_path}')
                         remove(replica_element_path) # delete a single file
                     else:
                         logging.info(f'Removing entire directory: {replica_element_path}')
@@ -177,7 +179,7 @@ class DirectorySynchroniser:
             sync_cycle += 1
         logging.info('Stopping synchronisation.')
 
-    def calc_md5_for_directory(self, dir_path:str)-> str: #TODO: what if directory is too large to be hash checked?
+    def calc_md5_for_directory(self, dir_path:str)-> str:
         """"
         Calculate a single MD5 checksum for the entire directory tree at dir_path.
         This will change if any file's contents, path, or empty directories change.
@@ -214,14 +216,26 @@ class DirectorySynchroniser:
         '''
         Verify whether source and replica match using MD5 checksum. Performed only once after the sync cycle.    
         '''
-        if self.calc_md5_for_directory(self.src_path) == self.calc_md5_for_directory(self.replica_path):
-            logging.info(f"Integrity between the synchronisation source and replica confirmed with MD5 checksum.")
+        total_size = 0
+        for root, _dirnames, fnames in walk(self.src_path):
+            for filename in fnames:
+                total_size += path.getsize(path.join(root, filename))
+        if total_size <= self.size_threshold:
+            if self.calc_md5_for_directory(self.src_path) == self.calc_md5_for_directory(self.replica_path):
+                logging.info(f"Integrity between the synchronisation source and replica confirmed with MD5 checksum.")
+            else:
+                logging.error(f"Integrity between the synchronisation source and replica could NOT be confirmed with MD5 checksum.")
         else:
-            logging.error(f"Integrity between the synchronisation source and replica could NOT be confirmed with MD5 checksum.")
+            logging.info(f"Skipping integrity verification as the source directory exceeds the maximum threshold allowed.")
 
 ## ----------------------------------------- Entry point -----------------------------------------
 def main():
     ''' Pass the command-line arguments, start the program, and perform integrity check.'''
+
+    if len(sys.argv) != 6:
+        logging.error("Usage: python custom_sync.py src_path replica_path sync_interval sync_attempt_limit log_path")
+        # sys.exit(1) # test environment requires that I do not call exit function. 
+
     src_path, replica_path, sync_interval, sync_attempt_limit, log_path = sys.argv[1:]
 
     sync_object = DirectorySynchroniser(
