@@ -9,7 +9,7 @@ import hashlib
 
 __authors__ = "Sarthak Choudhary"
 __repo_url__ = "https://github.com/sarthchoudhary/custom_sync"
-## command: python custom_sync.py /mnt/c/Users/sarth/Downloads/Test_folder /mnt/c/Users/sarth/Downloads/Replica_folder 15 12 /home/sarthak/my_projects/custom_sync/custom_sync.log
+## command: python custom_sync.py ~/Downloads/Test_folder ~/Downloads/Replica_folder 1.4 6 ~/my_projects/custom_sync/log_files/custom_sync.log
 
 ## ----------------------------------------- DirectorySynchroniser Class -----------------------------------------
 class DirectorySynchroniser:
@@ -28,7 +28,7 @@ class DirectorySynchroniser:
             self._validate_inputs(sync_interval, sync_attempt_limit)
             self._setup_logging()
             # directories exceeding this threshold will be skipped for integrity testing.
-            self.size_threshold = 3*1024**3  # bytes
+            self.size_threshold = 3*1024**3  # bytes # TODO: this could be larger.
 
     def _setup_logging(self):
         """Configure logging to file and console."""
@@ -56,10 +56,10 @@ class DirectorySynchroniser:
             raise PermissionError(f"No write permission for creating log at {log_file_path}. Please fix permissions and try again.")
 
     def _validate_inputs(self, sync_interval, sync_attempt_limit):
-        """Validate paths, permissions, and configuration.""" # not logged
+        """Validate paths, permissions, and configuration.""" # not logged to file. TODO issue?
         if not path.exists(self.src_path):
             logging.error(f"Source path does not exist: {self.src_path}")
-            # sys.exit(1) # only logging error; not exiting the program.
+            # sys.exit(1) # not exiting as per the test environment requirement.
         if not path.isdir(self.src_path):
             logging.error(f"Source path is not a directory: {self.src_path}")
             # sys.exit(1)
@@ -92,7 +92,7 @@ class DirectorySynchroniser:
         ''' Calculates MD5 checksum for a single file.'''
         md5 = hashlib.md5()
         with open(dir_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(8192), b''): # read file in chunks
+            for chunk in iter(lambda: f.read(8192), b''): # read file in chunks # TODO: try changing chunk size
                 md5.update(chunk)
         return md5.hexdigest()
 
@@ -151,8 +151,10 @@ class DirectorySynchroniser:
         """Run the synchronisation loop."""
         # spinner = itertools.cycle(['-', '/', '|', '\\'])
         # spinner = itertools.cycle(['*', '**', '***', '****', '*****'])
-        spinner = itertools.cycle(['←', '↖', '↑', '↗', '→', '↘', '↓', '↙'])
+        # spinner = itertools.cycle(['←', '↖', '↑', '↗', '→', '↘', '↓', '↙'])
+        spinner = itertools.cycle(['⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷'])
         logging.info('Beginning synchronisation.')
+        logging.info('Hidden files in Linux will be skipped.')
         sync_cycle = 0
         while sync_cycle < self.sync_attempt_limit:
             t0 = perf_counter()
