@@ -29,7 +29,7 @@ class DirectorySynchroniser:
             #     self.sync_attempt_limit = float(sync_attempt_limit)
             self.sync_attempt_limit = sync_attempt_limit
             self.log_path = log_path
-            self._validate_inputs(sync_interval, sync_attempt_limit)
+            self._validate_inputs()
             self._setup_logging()
             # directories exceeding this threshold will be skipped for integrity testing.
             self.size_threshold = 3*1024**3  # bytes # TODO: we could increase the threshold ~5 GB.
@@ -92,6 +92,9 @@ class DirectorySynchroniser:
             # logging.error(f"Log file does not have a valid extension.")
             # sys.exit(1)
             raise ValueError(f"Log file does not have a valid extension. Must be one of: .log, .txt, .out, .err, .dat, .csv, .json, .trc")
+        log_dir = path.dirname(self.log_path) or '.'
+        if not path.exists(log_dir):
+            raise FileNotFoundError(f"Log directory does not exist: {log_dir}")
         # try:
         #     self._check_permissions()
         # except PermissionError as e:
@@ -102,61 +105,92 @@ class DirectorySynchroniser:
     def calc_MD5(self, dir_path:str)->str:
         ''' Calculates MD5 checksum for a single file.'''
         md5 = hashlib.md5()
-        with open(dir_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(8192), b''): # read file in chunks # TODO: try changing chunk size
-                md5.update(chunk)
+        try:
+            with open(dir_path, 'rb') as f:
+                for chunk in iter(lambda: f.read(8192), b''): # read file in chunks # TODO: try changing chunk size
+                    md5.update(chunk)
+        except (IOError, PermissionError) as e:
+            raise IOError(f"Error reading file for MD5: {e}")
         return md5.hexdigest()
 
     def sync_dir_changes(self, src:str, replica:str):
         '''copies directory from src to replica. Also copies changes in files. Delete extra files found in replica.'''
-        # for element in listdir(src):
-        dir_elements_ls = [f for f in listdir(src) if not f.startswith('.')]
-        for element in dir_elements_ls:
-            if path.isfile(path.join(src, element)): # for files only
-                if not path.exists(path.join(replica, element)):
-                    logging.info(f'Copying {path.join(replica, element)}')
-                    shutil.copyfile(path.join(src, element), path.join(replica, element))
-                elif (path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element))) or (self.calc_MD5(path.join(src, element)) != self.calc_MD5(path.join(replica, element))):  # copies src to replica if src has newer modification timestamp
-                # any manual modification to a replica file should trigger sync code to replace that file with src copy. This is checked with MD5 checksum.
-                    logging.info(f'Copying {path.join(replica, element)}')
-                    shutil.copyfile(path.join(src, element), path.join(replica, element))
-
-            else: # for directories only
-                if not path.exists(path.join(replica, element)):
-                    logging.info(f'Copying entire directory: {path.join(replica, element)}')
-                    shutil.copytree(path.join(src, element), path.join(replica, element))
-                else:        # if the directory exists we need to traverse it and copy missing elements
-                    # for replica_element in listdir(path.join(replica, element)):
-                    replica_elements_ls = [f for f in listdir(path.join(replica, element)) if not f.startswith('.')] # we don't care about hidden files
-                    for replica_element in replica_elements_ls:
-                        if not path.exists(path.join(src, element, replica_element)):
-                            replica_element_path = path.join(replica, element, replica_element)
-                            if path.isfile(replica_element_path):
-                                logging.info(f'Removing {replica_element_path}')
-                                remove(replica_element_path) # delete a single file
+        try:
+            # for element in listdir(src):
+            dir_elements_ls = [f for f in listdir(src) if not f.startswith('.')]
+            for element in dir_elements_ls:
+                if path.isfile(path.join(src, element)): # for files only
+                    if not path.exists(path.join(replica, element)):
+                        logging.info(f'Copying {path.join(replica, element)}')
+                        shutil.copyfile(path.join(src, element), path.join(replica, element))
+                    # copies src to replica if src has newer modification timestamp
+                    # any manual modification to a replica file should trigger sync code to replace that file with src copy. File content changes are captured in MD5 checksum.
+                    else: 
+                        try:
+                            src_MD5 = self.calc_MD5(path.join(src, element))
+                            if path.isfile(path.join(replica, element)):
+                                replica_MD5 = self.calc_MD5(path.join(replica, element))
                             else:
-                                logging.info(f'Removing entire directory: {replica_element_path}')
-                                shutil.rmtree(replica_element_path) # delete dir tree
-                    self.sync_dir_changes(path.join(src, element), path.join(replica, element)) # recursion to propagate the sync down the directory tree
+                                replica_MD5 = None
+                            if (path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element))) or (src_MD5 != replica_MD5):
+                                logging.info(f'Copying {path.join(replica, element)}')
+                                shutil.copyfile(path.join(src, element), path.join(replica, element))
+                        except IOError as e:
+                            logging.error(f"Skipping file due to error in calculating MD5 checksum: {e}")
+                            continue
+
+                else: # for directories only
+                    if not path.exists(path.join(replica, element)):
+                        logging.info(f'Copying entire directory: {path.join(replica, element)}')
+                        shutil.copytree(path.join(src, element), path.join(replica, element))
+                    else:        # if the directory exists we need to traverse it and copy missing elements
+                        # for replica_element in listdir(path.join(replica, element)):
+                        replica_elements_ls = [f for f in listdir(path.join(replica, element)) if not f.startswith('.')] # we don't care about hidden files
+                        for replica_element in replica_elements_ls:
+                            if not path.exists(path.join(src, element, replica_element)):
+                                replica_element_path = path.join(replica, element, replica_element)
+                                if path.isfile(replica_element_path):
+                                    logging.info(f'Removing {replica_element_path}')
+                                    remove(replica_element_path) # delete a single file
+                                else:
+                                    logging.info(f'Removing entire directory: {replica_element_path}')
+                                    shutil.rmtree(replica_element_path) # delete dir tree
+                        self.sync_dir_changes(path.join(src, element), path.join(replica, element)) # recursion to propagate the sync down the directory tree
+        except  (OSError, IOError) as e:
+            logging.error(f"Error synchronising {src} to {replica}: {e}")
 
     def create_base_sync_changes(self, src:str, replica:str):
         ''' Creates the base directory if needed and synchronises changes from the source directory.'''
-        if not path.exists(replica):
-            logging.info(f'Creating replica directory: {replica}')
-            mkdir(replica)
-        else: # deletes extra dir from the base folder
-            # for replica_element in listdir(replica):
-            replica_elements_ls = [f for f in listdir(replica) if not f.startswith('.')]
-            for replica_element in replica_elements_ls:
-                if not path.exists(path.join(src, replica_element)):
+        try:
+            if not path.exists(replica):
+                logging.info(f'Creating replica directory: {replica}')
+                mkdir(replica)
+            else: # deletes extra dir from the base folder
+                # for replica_element in listdir(replica):
+                replica_elements_ls = [f for f in listdir(replica) if not f.startswith('.')]
+                for replica_element in replica_elements_ls:
                     replica_element_path = path.join(replica, replica_element)
-                    if path.isfile(replica_element_path):
-                        logging.info(f'Removing {replica_element_path}')
-                        remove(replica_element_path) # delete a single file
+                    src_element_path = path.join(src, replica_element)
+
+                    if not path.exists(src_element_path):
+                        # replica_element_path = path.join(replica, replica_element)
+                        if path.isfile(replica_element_path):
+                            logging.info(f'Removing {replica_element_path}')
+                            remove(replica_element_path) # delete a single file
+                        else:
+                            logging.info(f'Removing entire directory: {replica_element_path}')
+                            shutil.rmtree(replica_element_path) # delete dir tree
+                   # in case an extensionless file and a dir have same name. 
                     else:
-                        logging.info(f'Removing entire directory: {replica_element_path}')
-                        shutil.rmtree(replica_element_path) # delete dir tree
-        self.sync_dir_changes(src, replica)
+                        if (path.isfile(replica_element_path) and path.isdir(src_element_path)):
+                            logging.info(f'Removing {replica_element_path}')
+                            remove(replica_element_path)
+                        elif (path.isdir(replica_element_path) and path.isfile(src_element_path)):
+                            logging.info(f'Removing entire directory: {replica_element_path}')
+                            shutil.rmtree(replica_element_path)
+            self.sync_dir_changes(src, replica)
+        except (OSError, IOError) as e:
+            logging.error(f"Error synchronising base directory at {replica}: {e}")
 
     def start_sync(self):
         """Run the synchronisation loop."""
@@ -197,6 +231,7 @@ class DirectorySynchroniser:
         Calculate a single MD5 checksum for the entire directory tree at dir_path.
         This will change if any file's contents, path, or empty directories change.
         """
+        ##  May not work if src and replica are on different OSes. 
         dir_path = path.abspath(dir_path) # ensure path formatting
         md5 = hashlib.md5()
         follow_symlinks =  False
