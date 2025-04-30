@@ -17,17 +17,11 @@ __repo_url__ = "https://github.com/sarthchoudhary/custom_sync"
 class DirectorySynchroniser:
     """Manages synchronisation between a source and replica directory."""
 
-    # def __init__(self, src_path: str, replica_path: str, sync_interval: str, sync_attempt_limit: str, log_path: str):
     def __init__(self, src_path: str, replica_path: str, sync_interval: float, sync_attempt_limit: int, log_path: str):
             """Initialise variables."""
             self.src_path = src_path
             self.replica_path = replica_path
-            # self.sync_interval = float(sync_interval)
             self.sync_interval = sync_interval
-            # try:
-            #     self.sync_attempt_limit = int(sync_attempt_limit) # referred to as sync amount in original problem statement
-            # except ValueError as e:
-            #     self.sync_attempt_limit = float(sync_attempt_limit)
             self.sync_attempt_limit = sync_attempt_limit
             self.log_path = log_path
             self._validate_inputs()
@@ -84,11 +78,6 @@ class DirectorySynchroniser:
             raise ValueError("Sync attempt limit must be positive integer")
             # logging.error("Sync attempt limit must be positive integer")
             # sys.exit(1)
-        # if not isinstance(self.sync_attempt_limit, int):
-        #     self.sync_attempt_limit = round(self.sync_attempt_limit)
-        #     print(f"Rounding sync attempt limit to nearest integer: {self.sync_attempt_limit}.")
-        # if not (self.log_path.endswith('.log') or self.log_path.endswith('.txt')):
-            # logging.error(f"Log file should either be .log or .txt file.")
         if not path.splitext(self.log_path)[1].lower() in ['.log', '.txt', '.out', '.err', '.dat', '.csv', '.json', '.trc']:
             # logging.error(f"Log file does not have a valid extension.")
             # sys.exit(1)
@@ -96,11 +85,6 @@ class DirectorySynchroniser:
         log_dir = path.dirname(self.log_path) or '.'
         if not path.exists(log_dir):
             raise FileNotFoundError(f"Log directory does not exist: {log_dir}")
-        # try:
-        #     self._check_permissions()
-        # except PermissionError as e:
-        #     logging.error(str(e))
-            # sys.exit(1)
         self._check_permissions()
 
     def calc_MD5(self, dir_path:str)->str:
@@ -119,34 +103,19 @@ class DirectorySynchroniser:
         try:
             # for element in listdir(src):
             dir_elements_ls = [f for f in listdir(src) if not f.startswith('.')]
-            # dir_elements_ls = [f for f in listdir(src) if not f.startswith('.') and not path.islink(path.join(src, f))]
             for element in dir_elements_ls:
                 if path.isfile(path.join(src, element)): # for files only
-                # if path.isfile(path.join(src, element)) and not path.islink(path.join(src, element)):
                     if not path.exists(path.join(replica, element)):
                         logging.info(f'Copying to: {path.join(replica, element)}')
                         shutil.copyfile(path.join(src, element), path.join(replica, element))
                     # copies src to replica if src has newer modification timestamp
-                    # any manual modification to a replica file should trigger sync code to replace that file with src copy. File content changes are captured in MD5 checksum.
+                    # any modification to a replica file should trigger sync code to replace that file with src copy. Using filecmp.cmp to detect changes in files.
                     else: 
-                        # try:
-                        #     src_MD5 = self.calc_MD5(path.join(src, element))
-                        #     if path.isfile(path.join(replica, element)):
-                        #         replica_MD5 = self.calc_MD5(path.join(replica, element))
-                        #     else:
-                        #         replica_MD5 = None
-                        #     if (path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element))) or (src_MD5 != replica_MD5):
-                        #         logging.info(f'Copying to: {path.join(replica, element)}')
-                        #         shutil.copyfile(path.join(src, element), path.join(replica, element))
-                        # except IOError as e:
-                        #     logging.error(f"Skipping file due to error in calculating MD5 checksum: {e}")
-                        #     continue
-                        # Using filecmp.cmp to detect changes in files.
                         if (path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element))) or not cmp(path.join(src, element), path.join(replica, element), shallow=False):
                             logging.info(f'Copying to: {path.join(replica, element)}')
                             shutil.copyfile(path.join(src, element), path.join(replica, element))
 
-                # elif path.isdir(path.join(src, element)): # for directories only
+                # elif path.isdir(path.join(src, element)):
                 elif path.isdir(path.join(src, element)) and not path.islink(path.join(src, element)): # for directories only
                     if not path.exists(path.join(replica, element)):
                         logging.info(f'Copying entire directory to: {path.join(replica, element)}')
@@ -164,6 +133,7 @@ class DirectorySynchroniser:
                                     logging.info(f'Removing entire directory: {replica_element_path}')
                                     shutil.rmtree(replica_element_path) # delete dir tree
                         self.sync_dir_changes(path.join(src, element), path.join(replica, element)) # recursion to propagate the sync down the directory tree
+
                 elif path.islink(path.join(src, element)) and not path.exists(path.join(replica, element)): # for links only
                         logging.info(f'Creating link at: {path.join(replica, element)}')
                         symlink(path.join(src, element), path.join(replica, element))
@@ -196,7 +166,7 @@ class DirectorySynchroniser:
                             remove(replica_element_path) # delete link
                    # in case an extensionless file and a dir have same name. 
                     else:
-                        if (path.isfile(replica_element_path) and path.isdir(src_element_path)):
+                        if (path.isfile(replica_element_path) and path.isdir(src_element_path)): # isdir also captures symlinks
                             logging.info(f'Removing: {replica_element_path}')
                             remove(replica_element_path)
                         elif (path.isdir(replica_element_path) and path.isfile(src_element_path)):
@@ -208,9 +178,6 @@ class DirectorySynchroniser:
 
     def start_sync(self):
         """Run the synchronisation loop."""
-        # spinner = itertools.cycle(['-', '/', '|', '\\'])
-        # spinner = itertools.cycle(['*', '**', '***', '****', '*****'])
-        # spinner = itertools.cycle(['←', '↖', '↑', '↗', '→', '↘', '↓', '↙'])
         spinner = itertools.cycle(['⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷'])
         logging.info('Beginning synchronisation.')
         logging.info('Hidden files in Linux will be skipped.')
@@ -218,14 +185,9 @@ class DirectorySynchroniser:
         while sync_cycle < self.sync_attempt_limit:
             t0 = perf_counter()
             self.create_base_sync_changes(self.src_path, self.replica_path)
-            # sleep(sync_interval) # TODO: cleaning
             
             execution_time = perf_counter() - t0
             sleep_time = max(0, self.sync_interval - execution_time) # sleep_time always >= 0
-            # sleep(sleep_time)
-            # sys.stdout.write(next(spinner)) # could make spinner slow. New implementation below
-            # sys.stdout.flush()
-            # sys.stdout.write('\b') # not logged
             elapsed_time = 0
             while elapsed_time < sleep_time:
                 sys.stdout.write(next(spinner))
@@ -234,7 +196,7 @@ class DirectorySynchroniser:
                 elapsed_time += 0.1
                 sys.stdout.write('\b')
 
-            sys.stdout.write(' ')# clear spinner
+            sys.stdout.write(' ') # clear spinner
             sys.stdout.write('\b')
             sys.stdout.flush()
             sync_cycle += 1
