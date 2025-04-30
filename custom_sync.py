@@ -105,8 +105,8 @@ class DirectorySynchroniser:
             for element in dir_elements_ls:
                 src_element_path = path.join(src, element)
                 dst_element_path = path.join(replica, element)
-                if path.isfile(src_element_path): # for files only
-                # if path.isfile(src_element_path) and not path.islink(src_element_path): # for files only
+                # for files only
+                if path.isfile(src_element_path) and not path.islink(src_element_path): # for files only
                     if not path.exists(dst_element_path):
                         logging.info(f'Copying to: {dst_element_path}')
                         shutil.copyfile(src_element_path, dst_element_path)
