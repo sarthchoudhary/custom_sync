@@ -127,20 +127,22 @@ class DirectorySynchroniser:
                     # copies src to replica if src has newer modification timestamp
                     # any manual modification to a replica file should trigger sync code to replace that file with src copy. File content changes are captured in MD5 checksum.
                     else: 
-                        try:
-                            # src_MD5 = self.calc_MD5(path.join(src, element))
-                            # if path.isfile(path.join(replica, element)):
-                            #     replica_MD5 = self.calc_MD5(path.join(replica, element))
-                            # else:
-                            #     replica_MD5 = None
-                            # if (path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element))) or (src_MD5 != replica_MD5):
-                            # Using filecmp.cmp to detect changes in files.
-                            if (path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element))) or not cmp(path.join(src, element), path.join(replica, element), shallow=False):
-                                logging.info(f'Copying {path.join(replica, element)}')
-                                shutil.copyfile(path.join(src, element), path.join(replica, element))
-                        except IOError as e:
-                            logging.error(f"Skipping file due to error in calculating MD5 checksum: {e}")
-                            continue
+                        # try:
+                        #     src_MD5 = self.calc_MD5(path.join(src, element))
+                        #     if path.isfile(path.join(replica, element)):
+                        #         replica_MD5 = self.calc_MD5(path.join(replica, element))
+                        #     else:
+                        #         replica_MD5 = None
+                        #     if (path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element))) or (src_MD5 != replica_MD5):
+                        #         logging.info(f'Copying {path.join(replica, element)}')
+                        #         shutil.copyfile(path.join(src, element), path.join(replica, element))
+                        # except IOError as e:
+                        #     logging.error(f"Skipping file due to error in calculating MD5 checksum: {e}")
+                        #     continue
+                        # Using filecmp.cmp to detect changes in files.
+                        if (path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element))) or not cmp(path.join(src, element), path.join(replica, element), shallow=False):
+                            logging.info(f'Copying {path.join(replica, element)}')
+                            shutil.copyfile(path.join(src, element), path.join(replica, element))
 
                 else: # for directories only
                     if not path.exists(path.join(replica, element)):
