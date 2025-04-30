@@ -106,6 +106,7 @@ class DirectorySynchroniser:
                 src_element_path = path.join(src, element)
                 dst_element_path = path.join(replica, element)
                 if path.isfile(src_element_path): # for files only
+                # if path.isfile(src_element_path) and not path.islink(src_element_path): # for files only
                     if not path.exists(dst_element_path):
                         logging.info(f'Copying to: {dst_element_path}')
                         shutil.copyfile(src_element_path, dst_element_path)
@@ -116,11 +117,15 @@ class DirectorySynchroniser:
                             logging.info(f'Copying to: {dst_element_path}')
                             shutil.copyfile(src_element_path, dst_element_path)
 
+                elif path.islink(src_element_path) and not path.exists(dst_element_path): # for links only
+                        logging.info(f'Creating link at: {dst_element_path}')
+                        symlink(src_element_path, dst_element_path)
+
                 # elif path.isdir(src_element_path):
                 elif path.isdir(src_element_path) and not path.islink(src_element_path): # for directories only
                     if not path.exists(dst_element_path):
                         logging.info(f'Copying entire directory to: {dst_element_path}')
-                        shutil.copytree(src_element_path, dst_element_path)
+                        shutil.copytree(src_element_path, dst_element_path, symlinks=True)
                     else:        # if the directory exists we need to traverse it and copy missing elements
                         # for replica_element in listdir(dst_element_path):
                         replica_elements_ls = [f for f in listdir(dst_element_path) if not f.startswith('.')] # we don't care about hidden files on Linux; Windows?
@@ -135,9 +140,6 @@ class DirectorySynchroniser:
                                     shutil.rmtree(replica_element_path) # delete dir tree
                         self.sync_dir_changes(src_element_path, dst_element_path) # recursion to propagate the sync down the directory tree
 
-                elif path.islink(src_element_path) and not path.exists(dst_element_path): # for links only
-                        logging.info(f'Creating link at: {dst_element_path}')
-                        symlink(src_element_path, dst_element_path)
         except  (OSError, IOError) as e:
             logging.error(f"Error synchronising {src} to {replica}: {e}")
 
