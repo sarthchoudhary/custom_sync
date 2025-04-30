@@ -1,5 +1,5 @@
 ## ----------------------------------------- imported libraries -----------------------------------------
-from os import path, listdir, mkdir, remove, access, R_OK, W_OK, walk
+from os import path, listdir, mkdir, remove, access, R_OK, W_OK, walk, symlink
 import shutil
 from time import sleep, perf_counter
 import sys
@@ -119,10 +119,12 @@ class DirectorySynchroniser:
         try:
             # for element in listdir(src):
             dir_elements_ls = [f for f in listdir(src) if not f.startswith('.')]
+            # dir_elements_ls = [f for f in listdir(src) if not f.startswith('.') and not path.islink(path.join(src, f))]
             for element in dir_elements_ls:
                 if path.isfile(path.join(src, element)): # for files only
+                # if path.isfile(path.join(src, element)) and not path.islink(path.join(src, element)):
                     if not path.exists(path.join(replica, element)):
-                        logging.info(f'Copying {path.join(replica, element)}')
+                        logging.info(f'Copying to: {path.join(replica, element)}')
                         shutil.copyfile(path.join(src, element), path.join(replica, element))
                     # copies src to replica if src has newer modification timestamp
                     # any manual modification to a replica file should trigger sync code to replace that file with src copy. File content changes are captured in MD5 checksum.
@@ -134,33 +136,37 @@ class DirectorySynchroniser:
                         #     else:
                         #         replica_MD5 = None
                         #     if (path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element))) or (src_MD5 != replica_MD5):
-                        #         logging.info(f'Copying {path.join(replica, element)}')
+                        #         logging.info(f'Copying to: {path.join(replica, element)}')
                         #         shutil.copyfile(path.join(src, element), path.join(replica, element))
                         # except IOError as e:
                         #     logging.error(f"Skipping file due to error in calculating MD5 checksum: {e}")
                         #     continue
                         # Using filecmp.cmp to detect changes in files.
                         if (path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element))) or not cmp(path.join(src, element), path.join(replica, element), shallow=False):
-                            logging.info(f'Copying {path.join(replica, element)}')
+                            logging.info(f'Copying to: {path.join(replica, element)}')
                             shutil.copyfile(path.join(src, element), path.join(replica, element))
 
-                else: # for directories only
+                # elif path.isdir(path.join(src, element)): # for directories only
+                elif path.isdir(path.join(src, element)) and not path.islink(path.join(src, element)): # for directories only
                     if not path.exists(path.join(replica, element)):
-                        logging.info(f'Copying entire directory: {path.join(replica, element)}')
+                        logging.info(f'Copying entire directory to: {path.join(replica, element)}')
                         shutil.copytree(path.join(src, element), path.join(replica, element))
                     else:        # if the directory exists we need to traverse it and copy missing elements
                         # for replica_element in listdir(path.join(replica, element)):
-                        replica_elements_ls = [f for f in listdir(path.join(replica, element)) if not f.startswith('.')] # we don't care about hidden files
+                        replica_elements_ls = [f for f in listdir(path.join(replica, element)) if not f.startswith('.')] # we don't care about hidden files on Linux; Windows?
                         for replica_element in replica_elements_ls:
                             if not path.exists(path.join(src, element, replica_element)):
                                 replica_element_path = path.join(replica, element, replica_element)
                                 if path.isfile(replica_element_path):
-                                    logging.info(f'Removing {replica_element_path}')
+                                    logging.info(f'Removing: {replica_element_path}')
                                     remove(replica_element_path) # delete a single file
                                 else:
                                     logging.info(f'Removing entire directory: {replica_element_path}')
                                     shutil.rmtree(replica_element_path) # delete dir tree
                         self.sync_dir_changes(path.join(src, element), path.join(replica, element)) # recursion to propagate the sync down the directory tree
+                elif path.islink(path.join(src, element)) and not path.exists(path.join(replica, element)): # for links only
+                        logging.info(f'Creating link at: {path.join(replica, element)}')
+                        symlink(path.join(src, element), path.join(replica, element))
         except  (OSError, IOError) as e:
             logging.error(f"Error synchronising {src} to {replica}: {e}")
 
@@ -180,15 +186,18 @@ class DirectorySynchroniser:
                     if not path.exists(src_element_path):
                         # replica_element_path = path.join(replica, replica_element)
                         if path.isfile(replica_element_path):
-                            logging.info(f'Removing {replica_element_path}')
+                            logging.info(f'Removing: {replica_element_path}')
                             remove(replica_element_path) # delete a single file
-                        else:
+                        elif path.isdir(replica_element_path):
                             logging.info(f'Removing entire directory: {replica_element_path}')
                             shutil.rmtree(replica_element_path) # delete dir tree
+                        elif path.islink(replica_element_path):
+                            logging.info(f'Removing link: {replica_element_path}')
+                            remove(replica_element_path) # delete link
                    # in case an extensionless file and a dir have same name. 
                     else:
                         if (path.isfile(replica_element_path) and path.isdir(src_element_path)):
-                            logging.info(f'Removing {replica_element_path}')
+                            logging.info(f'Removing: {replica_element_path}')
                             remove(replica_element_path)
                         elif (path.isdir(replica_element_path) and path.isfile(src_element_path)):
                             logging.info(f'Removing entire directory: {replica_element_path}')
