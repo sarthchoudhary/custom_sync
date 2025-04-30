@@ -103,25 +103,27 @@ class DirectorySynchroniser:
             # for element in listdir(src):
             dir_elements_ls = [f for f in listdir(src) if not f.startswith('.')]
             for element in dir_elements_ls:
-                if path.isfile(path.join(src, element)): # for files only
-                    if not path.exists(path.join(replica, element)):
-                        logging.info(f'Copying to: {path.join(replica, element)}')
-                        shutil.copyfile(path.join(src, element), path.join(replica, element))
+                src_element_path = path.join(src, element)
+                dst_element_path = path.join(replica, element)
+                if path.isfile(src_element_path): # for files only
+                    if not path.exists(dst_element_path):
+                        logging.info(f'Copying to: {dst_element_path}')
+                        shutil.copyfile(src_element_path, dst_element_path)
                     # copies src to replica if src has newer modification timestamp
                     # any modification to a replica file should trigger sync code to replace that file with src copy. Using filecmp.cmp to detect changes in files.
                     else: 
-                        if (path.getmtime(path.join(src, element)) > path.getmtime(path.join(replica, element))) or not cmp(path.join(src, element), path.join(replica, element), shallow=False):
-                            logging.info(f'Copying to: {path.join(replica, element)}')
-                            shutil.copyfile(path.join(src, element), path.join(replica, element))
+                        if (path.getmtime(src_element_path) > path.getmtime(dst_element_path)) or not cmp(src_element_path, dst_element_path, shallow=False):
+                            logging.info(f'Copying to: {dst_element_path}')
+                            shutil.copyfile(src_element_path, dst_element_path)
 
-                # elif path.isdir(path.join(src, element)):
-                elif path.isdir(path.join(src, element)) and not path.islink(path.join(src, element)): # for directories only
-                    if not path.exists(path.join(replica, element)):
-                        logging.info(f'Copying entire directory to: {path.join(replica, element)}')
-                        shutil.copytree(path.join(src, element), path.join(replica, element))
+                # elif path.isdir(src_element_path):
+                elif path.isdir(src_element_path) and not path.islink(src_element_path): # for directories only
+                    if not path.exists(dst_element_path):
+                        logging.info(f'Copying entire directory to: {dst_element_path}')
+                        shutil.copytree(src_element_path, dst_element_path)
                     else:        # if the directory exists we need to traverse it and copy missing elements
-                        # for replica_element in listdir(path.join(replica, element)):
-                        replica_elements_ls = [f for f in listdir(path.join(replica, element)) if not f.startswith('.')] # we don't care about hidden files on Linux; Windows?
+                        # for replica_element in listdir(dst_element_path):
+                        replica_elements_ls = [f for f in listdir(dst_element_path) if not f.startswith('.')] # we don't care about hidden files on Linux; Windows?
                         for replica_element in replica_elements_ls:
                             if not path.exists(path.join(src, element, replica_element)):
                                 replica_element_path = path.join(replica, element, replica_element)
@@ -131,11 +133,11 @@ class DirectorySynchroniser:
                                 else:
                                     logging.info(f'Removing entire directory: {replica_element_path}')
                                     shutil.rmtree(replica_element_path) # delete dir tree
-                        self.sync_dir_changes(path.join(src, element), path.join(replica, element)) # recursion to propagate the sync down the directory tree
+                        self.sync_dir_changes(src_element_path, dst_element_path) # recursion to propagate the sync down the directory tree
 
-                elif path.islink(path.join(src, element)) and not path.exists(path.join(replica, element)): # for links only
-                        logging.info(f'Creating link at: {path.join(replica, element)}')
-                        symlink(path.join(src, element), path.join(replica, element))
+                elif path.islink(src_element_path) and not path.exists(dst_element_path): # for links only
+                        logging.info(f'Creating link at: {dst_element_path}')
+                        symlink(src_element_path, dst_element_path)
         except  (OSError, IOError) as e:
             logging.error(f"Error synchronising {src} to {replica}: {e}")
 
