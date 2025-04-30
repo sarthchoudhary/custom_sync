@@ -11,7 +11,6 @@ from filecmp import cmp
 
 __authors__ = "Sarthak Choudhary"
 __repo_url__ = "https://github.com/sarthchoudhary/custom_sync"
-## command: python custom_sync.py ~/Downloads/Test_folder ~/Downloads/Replica_folder 1.4 6 ~/my_projects/custom_sync/log_files/custom_sync.log
 
 ## ----------------------------------------- DirectorySynchroniser Class -----------------------------------------
 class DirectorySynchroniser:
